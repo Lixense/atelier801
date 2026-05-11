@@ -14,6 +14,7 @@ A comprehensive Python library for automating Atelier 801 account operations inc
 - Account status checking (certified, banned, etc.)
 - MailTM integration for temporary emails
 - Dynamic CSRF token handling
+- Save email associations with Atelier accounts
 
 ## Installation
 
@@ -53,6 +54,28 @@ status = client.get_account_status()
 print(f"Email: {status['email']}")
 print(f"Certified: {status['certified']}")
 print(f"Banned: {status['is_banned']}")
+```
+
+### Change Email with MailTM
+
+```python
+from atelier801 import Atelier801
+from mailtm import MailTM
+
+# Create temp email
+mailtm = MailTM()
+email, password = mailtm.create_account()
+
+# Login to Atelier
+client = Atelier801()
+client.login("Player#1234", "mypassword")
+
+# Change email
+result = client.change_email(email)
+print(f"Email change: {result['message']}")
+
+# Save association: email:password:account#
+mailtm.save_with_association(email, password, "Player#1234")
 ```
 
 ### Full Certification Flow
@@ -144,26 +167,26 @@ Get validation link from email.
 #### `get_certification_code(timeout=60)`
 Get certification code from email.
 
-#### `load_all_accounts()`
-Load all saved accounts from file.
+#### `save_with_association(email, password, atelier_account, filename="em.txt")`
+Save MailTM credentials with associated Atelier account.
 
-## Using Existing MailTM Account
+#### `load_associations(filename="em.txt")`
+Load all saved account associations.
 
-```python
-from mailtm import MailTM
+Returns: [(mailtm_email, mailtm_password, atelier_account), ...]
 
-# Login with existing account
-mailtm = MailTM()
-mailtm.login("existing@wshu.net", "password123")
+## File Formats
 
-# Or load from saved accounts
-mailtm = MailTM()
-mailtm.load_last_account()  # Load most recent
+### mailtm_accounts.txt
+```
+email:password
+email:password
+```
 
-# Or load specific account
-accounts = MailTM.load_all_accounts()
-email, pwd = accounts[0]  # First saved account
-mailtm.login(email, pwd)
+### em.txt (with associations)
+```
+email:password:account#
+email:password:Account#1505
 ```
 
 ## Error Handling

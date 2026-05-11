@@ -87,31 +87,52 @@ class Atelier801:
             >>> if client.login("Player#1234", "mypassword"):
             ...     print("Logged in!")
         """
+        # Get login page
+        resp = self.session.get(f"{self.BASE_URL}/login")
+        
+        # Extract form fields
+        form_match = re.search(r'<form[^>]*id="identification"[^>]*>(.*?)</form>', resp.text, re.DOTALL)
+        if not form_match:
+            return False
+        
+        form_content = form_match.group(1)
+        all_inputs = re.findall(r'<input[^>]*>', form_content)
+        
         # Encrypt password
         encrypted = encrypt_password(password)
         
-        # Get login page for initial token
-        resp = self.session.get(f"{self.BASE_URL}/login")
-        
-        # Extract login token if needed
-        token_match = re.search(r'name="token" value="([^"]+)"', resp.text)
-        token = token_match.group(1) if token_match else ""
-        
-        # Login request
+        # Build data
         data = {
-            'login': username,
-            'password': encrypted,
-            'token': token,
-            'connexion': '1'
+            'rester_connecte': 'on',
+            'id': username,
+            'pass': encrypted,
+            'redirect': 'https://atelier801.com',
         }
         
-        resp = self.session.post(f"{self.BASE_URL}/login", data=data, allow_redirects=True)
+        # Add other form fields
+        for inp in all_inputs:
+            name_match = re.search(r'name="([^"]+)"', inp)
+            value_match = re.search(r'value="([^"]*)"', inp)
+            if name_match:
+                field_name = name_match.group(1)
+                field_value = value_match.group(1) if value_match else ""
+                if field_name not in data:
+                    data[field_name] = field_value
         
-        # Check if logged in by looking for account link
-        if f"{username.split('#')[0]}#" in resp.text or 'deconnexion' in resp.text.lower():
+        # Post headers
+        post_headers = {
+            'Referer': 'https://atelier801.com/login',
+            'Origin': 'https://atelier801.com',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        }
+        
+        resp = self.session.post(f"{self.BASE_URL}/identification", data=data, headers=post_headers, allow_redirects=False)
+        
+        # Check for successful login (redirect response with session cookie)
+        if 'login=' in str(self.session.cookies) and 'JSESSIONID' in str(self.session.cookies):
             self.logged_in = True
             self.username = username
-            self._account_cache = None  # Reset cache
+            self._account_cache = None
             return True
         
         return False
