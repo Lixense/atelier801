@@ -1,9 +1,9 @@
 # Atelier801 Python Library
 
-![Python](https://img.shields.io/pypi/pyversions/atelier801)
-![License](https://img.shields.io/pypi/l/atelier801)
-![Version](https://img.shields.io/pypi/v/atelier801)
-![Stars](https://img.shields.io/github/stars/Lixense/atelier801)
+[![PyPI](https://img.shields.io/pypi/v/atelier801.svg)](https://pypi.org/project/atelier801/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/atelier801.svg)](https://pypi.org/project/atelier801/)
+[![PyPI - License](https://img.shields.io/pypi/l/atelier801.svg)](https://pypi.org/project/atelier801/)
+[![GitHub Stars](https://img.shields.io/github/stars/Lixense/atelier801.svg)](https://github.com/Lixense/atelier801)
 
 A comprehensive Python library for automating Atelier 801 account operations including login, email management, certification, and account status checking.
 
@@ -265,5 +265,5 @@ MIT License - See LICENSE file for details.
 
 For issues and feature requests, please open an issue on GitHub.
 
-![Forks](https://img.shields.io/github/forks/Lixense/atelier801?style=social)
-![Stars](https://img.shields.io/github/stars/Lixense/atelier801?style=social)
+[![GitHub Forks](https://img.shields.io/github/forks/Lixense/atelier801.svg?style=social)](https://github.com/Lixense/atelier801)
+[![GitHub Stars](https://img.shields.io/github/stars/Lixense/atelier801.svg?style=social)](https://github.com/Lixense/atelier801)
