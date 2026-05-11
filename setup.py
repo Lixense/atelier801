@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="atelier801",
-    version="1.0.6",
+    version="1.0.7",
     author="Lixense",
     author_email="lixlix870@gmail.com",
     description="Python library for Atelier 801 automation",
