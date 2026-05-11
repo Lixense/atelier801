@@ -517,5 +517,54 @@ class MailTM:
             return True
         return False
     
+    def save_with_association(self, email: str, password: str, atelier_account: str, filename: str = "em.txt") -> None:
+        """
+        Save MailTM credentials with associated Atelier account.
+        
+        Args:
+            email: MailTM email address
+            password: MailTM password
+            atelier_account: Atelier 801 account (e.g., "Player#1234")
+            filename: File to save to (default: em.txt)
+            
+        Example:
+            >>> mailtm.save_with_association("test@wshu.net", "pass123", "Player#1234")
+        """
+        with open(filename, "a") as f:
+            f.write(f"{email}:{password}:{atelier_account}\n")
+    
+    @staticmethod
+    def load_associations(filename: str = "em.txt") -> List[Tuple[str, str, str]]:
+        """
+        Load all saved account associations.
+        
+        Args:
+            filename: File to load from (default: em.txt)
+            
+        Returns:
+            list: List of (mailtm_email, mailtm_password, atelier_account)
+            
+        Example:
+            >>> assocs = MailTM.load_associations()
+            >>> for email, pwd, account in assocs:
+            ...     print(f"{email} -> {account}")
+        """
+        associations = []
+        if not os.path.exists(filename):
+            return associations
+        
+        with open(filename, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and ":" in line:
+                    parts = line.split(":")
+                    if len(parts) >= 3:
+                        email = parts[0]
+                        pwd = parts[1]
+                        account = ":".join(parts[2:])  # Handle account with # in name
+                        associations.append((email, pwd, account))
+        
+        return associations
+    
     def __repr__(self) -> str:
         return f"<MailTM email={self.email} logged_in={self.token is not None}>"
