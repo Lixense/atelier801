@@ -452,23 +452,48 @@ class Atelier801:
         """
         return self.logged_in
     
-    def check_email_changed(self, expected_email_prefix: str) -> bool:
+    def check_email_changed(self, new_email: str) -> bool:
         """
         Check if email has been changed successfully.
         
+        Atelier801 masks emails showing only the first letter (e.g. "p***@w***.net").
+        We check if the first letter of the new email appears in the Mail field.
+        
         Args:
-            expected_email_prefix: First few characters of the expected new email
+            new_email: The new email address that was set
             
         Returns:
-            bool: True if email prefix matches (email changed successfully)
+            bool: True if email appears to have changed (first letter matches)
             
         Example:
-            >>> # After email change request
-            >>> if client.check_email_changed("abc"):
+            >>> # After email change + validation
+            >>> if client.check_email_changed("p7w5p96cao68@wshu.net"):
             ...     print("Email changed successfully!")
         """
         html = self.get_account_page()
-        return expected_email_prefix.lower() in html.lower()
+        first_letter = (new_email[0].lower() if new_email else '')
+        
+        # Check mail2 input value (shows masked email like "p***@w***.net")
+        mail2_match = re.search(r'<input[^>]*id="mail2"[^>]*value="([^"]*)"', html)
+        if mail2_match:
+            current = mail2_match.group(1).lower()
+            if current.startswith(first_letter):
+                return True
+        
+        # Check the displayed Mail field - pattern: Mail : <span>email</span>
+        mail_match = re.search(r'Mail\s*:\s*<[^>]*>([^<]+)', html)
+        if mail_match:
+            displayed = mail_match.group(1).strip().lower()
+            if displayed.startswith(first_letter):
+                return True
+        
+        # Check for any email starting with the first letter in the page
+        # Pattern: firstletter***@***.net
+        masked_pattern = first_letter + r'[*@]'
+        if re.search(masked_pattern, html.lower()):
+            return True
+        
+        return False
     
     def __repr__(self) -> str:
         return f"<Atelier801 logged_in={self.logged_in} username={self.username}>"
