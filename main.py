@@ -1,7 +1,7 @@
 """
 Atelier 801 Email Change Automation
 =====================================
-Fast flow: Login → Create MailTM → Change Email → Validate Link → Verify Change
+Fast flow: Login -> Create MailTM -> Change Email -> Validate Link -> Verify Change
 """
 
 from atelier801 import Atelier801
@@ -12,7 +12,7 @@ import time
 def change_email_for_account(username, password, existing_mailtm=None):
     """
     Change Atelier 801 account email to a MailTM address.
-    Works for uncertified accounts only.
+    Only works for accounts WITHOUT validated email.
     
     Args:
         username: Atelier 801 username (e.g., "Player#1234")
@@ -50,17 +50,19 @@ def change_email_for_account(username, password, existing_mailtm=None):
     
     print("     Logged in!")
     
-    # Check if email form is visible (certified accounts can change email if form is shown)
+    # Check if email can be changed
+    # "Nouveau mail" = email NOT verified - CAN change
+    # "Vous devez d'abord certifier" = email IS verified - CANNOT change
     html = client.get_account_page()
-    if 'form_changer_mail' in html:
-        idx = html.find('form_changer_mail')
-        form_section = html[idx:idx+100] if idx >= 0 else ""
-        if 'hidden' in form_section:
-            result['error'] = 'Account is certified - use game UI to change email'
-            print("     SKIPPED: Account is certified")
-            return result
+    
+    if 'Nouveau mail' in html:
+        # Can change - no validated email
+        pass
+    elif 'Vous devez d\'abord certifier' in html or 'form-get-certification' in html:
+        result['error'] = 'Has validated email - use game UI'
+        print("     SKIPPED: Has validated email")
+        return result
     else:
-        # No form at all - can't change email
         result['error'] = 'No email form found'
         print("     SKIPPED: No email form")
         return result
@@ -105,26 +107,16 @@ def change_email_for_account(username, password, existing_mailtm=None):
     return result
 
 
-# ============== QUICK EXAMPLE ==============
-# Usage: python main.py
-# Change the values below to use with your accounts
-
 if __name__ == "__main__":
-    print("=" * 50)
-    print("ATELIER 801 EMAIL CHANGE")
-    print("=" * 50)
-    print("\nUsage:")
-    print("  from atelier801 import Atelier801")
-    print("  from mailtm import MailTM")
-    print("")
-    print("  # Create new email")
-    print("  mailtm = MailTM()")
-    print("  email, password = mailtm.create_account()")
-    print("")
-    print("  # Login and change")
-    print("  client = Atelier801()")
-    print("  client.login('YourAccount#1234', 'yourpassword')")
-    print("  client.change_email(email)")
-    print("")
-    print("  See README.md for full documentation!")
-    print("=" * 50)
+    # Quick test for Prosodyo#9496
+    from atelier801 import Atelier801
+    c = Atelier801()
+    c.login('Prosodyo#9496', '6tf3bx3h')
+    html = c.get_account_page()
+    
+    if 'Nouveau mail' in html:
+        print("Can change email - not verified yet")
+    elif 'Vous devez d\'abord certifier' in html:
+        print("Has validated email - cannot change via API")
+    else:
+        print("Cannot change email")
