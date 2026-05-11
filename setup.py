@@ -11,7 +11,7 @@ setup(
     name="atelier801",
     version="1.0.0",
     author="Lixense",
-    author_email="",
+    author_email="lixlix870@gmail.com",
     description="Python library for Atelier 801 automation",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -31,4 +31,11 @@ setup(
     install_requires=[
         "requests>=2.28.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "black>=22.0.0",
+            "flake8>=4.0.0",
+        ]
+    },
 )
