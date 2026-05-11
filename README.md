@@ -1,277 +1,229 @@
 # Atelier801 Python Library
 
+<p align="center">
+  <img src="https://img.shields.io/pypi/pyversions/atelier801" alt="Python Version">
+  <img src="https://img.shields.io/pypi/l/atelier801" alt="License">
+  <img src="https://img.shields.io/pypi/v/atelier801" alt="Version">
+  <img src="https://img.shields.io/github/stars/Lixense/atelier801" alt="Stars">
+</p>
+
 A comprehensive Python library for automating Atelier 801 account operations including login, email management, certification, and account status checking.
 
-![Python Version](https://img.shields.io/pypi/pyversions/atelier801)
-![License](https://img.shields.io/pypi/l/atelier801)
-![Version](https://img.shields.io/pypi/v/atelier801)
+---
 
 ## Features
 
-- 🔐 Account login with encrypted password
-- 📧 Email change automation (uncertified accounts only)
-- ✅ Certification request and code submission
-- 🔍 Account status checking (certified, banned, etc.)
-- 📬 MailTM integration for temporary emails
-- 🛡️ Dynamic CSRF token handling
-- 🔗 Save email associations with Atelier accounts
+| Feature | Description |
+|---------|-------------|
+| **Secure Login** | Login with encrypted password (SHAKikoo algorithm) |
+| **Email Management** | Change account email to temporary MailTM addresses |
+| **Certification** | Request and submit certification codes |
+| **Status Check** | Check if account has validated email, banned, or valid |
+| **Email Verification** | Validate email changes via link |
+| **Account Storage** | Save email associations for multiple accounts |
+
+---
 
 ## Installation
 
+### From PyPI (Recommended)
 ```bash
 pip install atelier801
 ```
 
-Or install from source:
-
+### From Source
 ```bash
-git clone https://github.com/yourusername/atelier801.git
+git clone https://github.com/Lixense/atelier801.git
 cd atelier801
 pip install -e .
 ```
 
+---
+
 ## Quick Start
 
-### Basic Login
-
+### Login to Account
 ```python
 from atelier801 import Atelier801
 
 client = Atelier801()
 if client.login("Player#1234", "mypassword"):
-    print("Logged in!")
+    print("Successfully logged in!")
 ```
 
 ### Check Account Status
-
 ```python
-from atelier801 import Atelier801
-
 client = Atelier801()
 client.login("Player#1234", "mypassword")
 
 status = client.get_account_status()
 print(f"Email: {status['email']}")
-print(f"Certified: {status['certified']}")
+print(f"Has Validated Email: {status['certified']}")
 print(f"Banned: {status['is_banned']}")
 ```
 
-### Full Certification Flow
+---
 
-**Important:** Email change only works for uncertified accounts. Certified accounts must use the game UI.
+## Important: Email Change Restriction
+
+Email change via API only works for accounts that **do NOT have a validated email address**.
+
+### What does this mean?
+
+| Account Type | Description | API Email Change |
+|--------------|-------------|------------------|
+| **No Validated Email** | Account has no email or email is not verified | **Works** |
+| **Has Validated Email** | Account already has a verified email address | **Does NOT work** - Use game UI |
+
+### How to check?
+
+```python
+client = Atelier801()
+client.login("Player#1234", "password")
+
+html = client.get_account_page()
+
+# Check if email form is visible (not hidden = has validated email)
+if 'form_changer_mail' in html:
+    idx = html.find('form_changer_mail')
+    form_section = html[idx:idx+100]
+    if 'hidden' in form_section:
+        print("No validated email - API email change works!")
+    else:
+        print("Has validated email - must use game UI to change")
+```
+
+This is an Atelier 801 website restriction, not a library limitation.
+
+---
+
+## Full Example: Email Change Flow
 
 ```python
 from atelier801 import Atelier801
 from mailtm import MailTM
 import time
 
-# Create temp email
-mailtm = MailTM()
-email, password = mailtm.create_account()
-
-# Login to Atelier
-client = Atelier801()
-client.login("Player#1234", "mypassword")
-
-# Check if account is certified (email change won't work if certified)
-status = client.get_account_status()
-if status['certified']:
-    print("Account is already certified - use game UI to change email")
-else:
-    # Change email
-    result = client.change_email(email)
-    if result['success']:
-        print(f"Email change requested: {result['message']}")
-        
-        # Wait for validation email
-        mailtm.login(email, password)
-        validation_link = mailtm.get_validation_link(timeout=60)
-        
-        if validation_link:
-            # Validate email
-            client.validate_email(validation_link)
-            print("Email validated!")
+def change_email_flow(username, password):
+    # Step 1: Create MailTM account
+    mailtm = MailTM()
+    email, mailtm_password = mailtm.create_account()
+    print(f"Created: {email}")
+    
+    # Step 2: Login to Atelier 801
+    client = Atelier801()
+    client.login(username, password)
+    
+    # Step 3: Check if can change email
+    html = client.get_account_page()
+    if 'form_changer_mail' in html:
+        idx = html.find('form_changer_mail')
+        form_section = html[idx:idx+100]
+        if 'hidden' in form_section:
+            # Step 4: Change email
+            result = client.change_email(email)
+            print(result['message'])
             
-            # Verify email changed (check if new email prefix appears)
-            time.sleep(2)  # Wait for page update
-            if client.check_email_changed(email[:3]):
-                print("Email change confirmed!")
+            # Step 5: Get validation link
+            mailtm.login(email, mailtm_password)
+            link = mailtm.get_validation_link(timeout=60)
+            
+            if link:
+                # Step 6: Validate
+                client.validate_email(link)
+                time.sleep(2)
                 
-                # Save association
-                mailtm.save_with_association(email, password, "Player#1234")
-                print("Saved to em.txt")
-            else:
-                print("Email change may not have completed")
+                # Step 7: Verify change
+                if client.check_email_changed(email):
+                    print(f"SUCCESS! Email changed to {email[0]}***")
+                    
+                    # Save for later
+                    mailtm.save_with_association(email, mailtm_password, username)
+                else:
+                    print("Change not confirmed")
         else:
-            print("No validation email received")
+            print("Account has validated email - change via game UI")
+    else:
+        print("No email form available")
+
+# Run
+change_email_flow("Player#1234", "mypassword")
 ```
+
+---
 
 ## API Reference
 
 ### Atelier801 Client
 
 #### `Atelier801(session=None)`
+Create a new client instance.
 
-Create a new Atelier801 client.
-
-**Parameters:**
-- `session` (requests.Session, optional): Custom session to use
-
-**Example:**
 ```python
 client = Atelier801()
 # or with custom session
+import requests
 sess = requests.Session()
 client = Atelier801(session=sess)
 ```
 
 #### `login(username, password)`
+Login to account. Returns `bool`.
 
-Login to Atelier 801 account.
-
-**Parameters:**
-- `username` (str): Username with discriminator (e.g., "Player#1234")
-- `password` (str): Account password
-
-**Returns:** `bool` - True if login successful
-
-**Example:**
 ```python
-client = Atelier801()
-client.login("Player#1234", "mypassword")
-```
-
-#### `get_account_status(force_refresh=False)`
-
-Get comprehensive account status.
-
-**Parameters:**
-- `force_refresh` (bool): Force refresh cached data (default: False)
-
-**Returns:** `dict` with keys:
-- `username` (str): Full username
-- `email` (str): Current email (masked)
-- `email_validated` (bool): Email validation status
-- `certified` (bool): Certification status
-- `registration_date` (str): Registration date
-- `is_banned` (bool): Ban status
-- `ban_info` (dict): Ban details if banned
-
-**Example:**
-```python
-status = client.get_account_status()
-print(status['email'])       # "p***@g***.com"
-print(status['certified'])   # True/False
-print(status['is_banned'])   # True/False
-```
-
-#### `change_email(new_email)`
-
-Change account email address.
-
-**Note:** Only works for uncertified accounts.
-
-**Parameters:**
-- `new_email` (str): New email address
-
-**Returns:** `dict` with keys:
-- `success` (bool): Operation success
-- `message` (str): Response message
-- `validation_sent` (bool): Whether validation email sent
-
-**Example:**
-```python
-result = client.change_email("newemail@example.com")
-if result['success']:
-    print("Email change requested!")
-```
-
-#### `check_email_changed(expected_email_prefix)`
-
-Check if email has been changed successfully.
-
-**Parameters:**
-- `expected_email_prefix` (str): First few characters of expected new email
-
-**Returns:** `bool` - True if email prefix matches
-
-**Example:**
-```python
-if client.check_email_changed("abc"):
-    print("Email changed successfully!")
-```
-
-#### `validate_email(validation_link)`
-
-Visit validation link to confirm email.
-
-**Parameters:**
-- `validation_link` (str): Full validation URL from email
-
-**Returns:** `bool` - True if validation successful
-
-**Example:**
-```python
-link = mailtm.get_validation_link()
-client.validate_email(link)
-```
-
-#### `request_certification()`
-
-Request certification email.
-
-**Returns:** `dict` with keys:
-- `success` (bool): Request success
-- `message` (str): Response message
-- `token_name` (str): CSRF token name used
-- `token_value` (str): CSRF token value used
-
-**Example:**
-```python
-result = client.request_certification()
-if result['success']:
-    print("Certification email sent!")
-```
-
-#### `submit_certification_code(code)`
-
-Submit certification code from email.
-
-**Parameters:**
-- `code` (str): Certification code
-
-**Returns:** `dict` with keys:
-- `success` (bool): Submission success
-- `message` (str): Response message
-
-**Example:**
-```python
-code = mailtm.get_certification_code()
-result = client.submit_certification_code(code)
-print(f"Certified: {result['success']}")
-```
-
-#### `is_logged_in()`
-
-Check login status.
-
-**Returns:** `bool` - Login status
-
-**Example:**
-```python
-if client.is_logged_in():
+if client.login("Player#1234", "password"):
     print("Logged in!")
 ```
 
-#### `logout()`
+#### `get_account_status(force_refresh=False)`
+Get account info. Returns dict with:
+- `username` - Account name
+- `email` - Masked email (e.g., "p***@w***.net")
+- `certified` - Has validated email (True = has validated, False = no validated)
+- `is_banned` - Ban status
+- `ban_info` - Ban details if banned
 
-Logout from current session.
-
-**Returns:** `bool` - Logout success
-
-**Example:**
 ```python
-client.logout()
+status = client.get_account_status()
+print(status['email'])
+print(status['certified'])
+```
+
+#### `change_email(new_email)`
+Request email change. Returns dict with `success` and `message`.
+
+```python
+result = client.change_email("newemail@example.com")
+print(result['message'])
+```
+
+#### `validate_email(validation_link)`
+Visit validation link from email. Returns `bool`.
+
+```python
+client.validate_email("https://atelier801.com/validate-email?id=...")
+```
+
+#### `check_email_changed(new_email)`
+Verify email was changed. Returns `bool`.
+
+```python
+if client.check_email_changed("newemail@example.com"):
+    print("Email changed successfully!")
+```
+
+#### `request_certification()`
+Request certification email. Returns dict.
+
+```python
+result = client.request_certification()
+```
+
+#### `submit_certification_code(code)`
+Submit certification code. Returns dict with `success`.
+
+```python
+result = client.submit_certification_code("ABC12")
 ```
 
 ---
@@ -279,173 +231,73 @@ client.logout()
 ### MailTM Client
 
 #### `MailTM(credentials_file="mailtm_accounts.txt")`
-
 Create MailTM client.
 
-**Parameters:**
-- `credentials_file` (str): Path for credentials storage
-
-**Example:**
 ```python
 mailtm = MailTM()
-# or custom file
-mailtm = MailTM(credentials_file="my_accounts.txt")
 ```
 
 #### `create_account(password=None, domain=None)`
+Create new temporary email. Returns `(email, password)`.
 
-Create new MailTM account.
-
-**Parameters:**
-- `password` (str, optional): Custom password
-- `domain` (str, optional): Specific domain
-
-**Returns:** `tuple` - (email, password)
-
-**Example:**
 ```python
 email, password = mailtm.create_account()
-# or with custom password
-email, password = mailtm.create_account(password="mypassword123")
 ```
 
 #### `login(email, password)`
+Login to MailTM account.
 
-Login to MailTM.
-
-**Parameters:**
-- `email` (str): Email address
-- `password` (str): Password
-
-**Example:**
 ```python
-mailtm.login("test@wshu.net", "password")
+mailtm.login(email, password)
 ```
 
 #### `get_inbox(limit=10)`
+Get inbox messages. Returns list.
 
-Get inbox messages.
-
-**Parameters:**
-- `limit` (int): Max messages to return
-
-**Returns:** `list` - Message list
-
-**Example:**
 ```python
 inbox = mailtm.get_inbox()
-for msg in inbox:
-    print(msg['subject'])
 ```
 
 #### `get_message(message_id)`
+Get full message content.
 
-Get specific message.
-
-**Parameters:**
-- `message_id` (str): Message ID
-
-**Returns:** `dict` - Full message data
-
-**Example:**
 ```python
 msg = mailtm.get_message("abc123")
-print(msg['text'])  # Plain text
-print(msg['html'])  # HTML content
-```
-
-#### `wait_for_email(sender_contains=None, subject_contains=None, timeout=60, interval=2)`
-
-Wait for email matching criteria.
-
-**Parameters:**
-- `sender_contains` (str, optional): Sender filter
-- `subject_contains` (str, optional): Subject filter
-- `timeout` (int): Max wait seconds
-- `interval` (int): Check interval seconds
-
-**Returns:** `dict` - Full message or None
-
-**Example:**
-```python
-msg = mailtm.wait_for_email(
-    sender_contains="atelier801",
-    subject_contains="validation",
-    timeout=120
-)
+print(msg['text'])   # Plain text
+print(msg['html'])   # HTML content
 ```
 
 #### `get_validation_link(timeout=60)`
+Get email validation link from inbox. Returns `str` or `None`.
 
-Get validation link from email.
-
-**Parameters:**
-- `timeout` (int): Max wait seconds
-
-**Returns:** `str` - Validation URL or None
-
-**Example:**
 ```python
 link = mailtm.get_validation_link()
 ```
 
 #### `get_certification_code(timeout=60)`
+Get certification code from inbox. Returns `str` or `None`.
 
-Get certification code from email.
-
-**Parameters:**
-- `timeout` (int): Max wait seconds
-
-**Returns:** `str` - Certification code or None
-
-**Example:**
 ```python
 code = mailtm.get_certification_code()
 ```
 
 #### `save_with_association(email, password, atelier_account, filename="em.txt")`
-
 Save MailTM credentials with associated Atelier account.
 
-**Parameters:**
-- `email` (str): MailTM email
-- `password` (str): MailTM password
-- `atelier_account` (str): Atelier 801 account
-- `filename` (str): File to save to
-
-**Example:**
 ```python
-mailtm.save_with_association("test@wshu.net", "pass123", "Player#1234")
+mailtm.save_with_association(email, password, "Player#1234")
 ```
 
 #### `load_associations(filename="em.txt")`
+Load all saved associations. Returns list of tuples.
 
-Load all saved account associations.
-
-**Parameters:**
-- `filename` (str): File to load from
-
-**Returns:** `list` - [(mailtm_email, mailtm_password, atelier_account), ...]
-
-**Example:**
 ```python
 assocs = MailTM.load_associations()
 for email, pwd, account in assocs:
     print(f"{email} -> {account}")
 ```
 
-#### `load_all_accounts()`
-
-Load all saved accounts.
-
-**Returns:** `list` - [(email, password), ...]
-
-**Example:**
-```python
-accounts = MailTM.load_all_accounts()
-for email, pwd in accounts:
-    print(email)
-```
+---
 
 ## File Formats
 
@@ -455,28 +307,22 @@ email:password
 email:password
 ```
 
-### em.txt (with associations)
+### em.txt (Associations)
 ```
 email:password:account#
-email:password:Account#1505
+email:password:Account#1234
 ```
 
-## Important Notes
-
-- **Email change only works for uncertified accounts** - Certified accounts must use the game UI
-- Always check if the account is certified before attempting email change
-- Use `check_email_changed()` to verify email change success after validation
-- Certification code submission may fail if the code is expired or already used
+---
 
 ## Error Handling
 
 ```python
 from atelier801 import Atelier801
-from mailtm import MailTM
 
 try:
     client = Atelier801()
-    client.login("Player#1234", "mypassword")
+    client.login("Player#1234", "password")
     
     status = client.get_account_status()
     if status['is_banned']:
@@ -486,10 +332,23 @@ except Exception as e:
     print(f"Error: {e}")
 ```
 
+---
+
 ## License
 
-MIT License
+MIT License - See LICENSE file for details.
+
+---
 
 ## Support
 
 For issues and feature requests, please open an issue on GitHub.
+
+<p align="center">
+  <a href="https://github.com/Lixense/atelier801">
+    <img src="https://img.shields.io/github/forks/Lixense/atelier801?style=social" alt="Fork">
+  </a>
+  <a href="https://github.com/Lixense/atelier801">
+    <img src="https://img.shields.io/github/stars/Lixense/atelier801?style=social" alt="Star">
+  </a>
+</p>
