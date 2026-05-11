@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="atelier801",
-    version="1.0.0",
+    version="1.0.1",
     author="Lixense",
     author_email="lixlix870@gmail.com",
     description="Python library for Atelier 801 automation",
@@ -31,11 +31,4 @@ setup(
     install_requires=[
         "requests>=2.28.0",
     ],
-    extras_require={
-        "dev": [
-            "pytest>=7.0.0",
-            "black>=22.0.0",
-            "flake8>=4.0.0",
-        ]
-    },
 )
