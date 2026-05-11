@@ -15,7 +15,7 @@ def change_email_for_account(username, password, existing_mailtm=None):
     Works for uncertified accounts only.
     
     Args:
-        username: Atelier 801 username (e.g., "Hora#1469")
+        username: Atelier 801 username (e.g., "Player#1234")
         password: Atelier 801 password
         existing_mailtm: Optional tuple (email, password) to reuse MailTM
     
@@ -50,11 +50,19 @@ def change_email_for_account(username, password, existing_mailtm=None):
     
     print("     Logged in!")
     
-    # Check if certified first
-    status = client.get_account_status()
-    if status['certified']:
-        result['error'] = 'Account is certified - use game UI to change email'
-        print("     SKIPPED: Account is certified")
+    # Check if email form is visible (certified accounts can change email if form is shown)
+    html = client.get_account_page()
+    if 'form_changer_mail' in html:
+        idx = html.find('form_changer_mail')
+        form_section = html[idx:idx+100] if idx >= 0 else ""
+        if 'hidden' in form_section:
+            result['error'] = 'Account is certified - use game UI to change email'
+            print("     SKIPPED: Account is certified")
+            return result
+    else:
+        # No form at all - can't change email
+        result['error'] = 'No email form found'
+        print("     SKIPPED: No email form")
         return result
     
     # Step 3: Change email
@@ -98,25 +106,25 @@ def change_email_for_account(username, password, existing_mailtm=None):
 
 
 # ============== QUICK EXAMPLE ==============
+# Usage: python main.py
+# Change the values below to use with your accounts
+
 if __name__ == "__main__":
     print("=" * 50)
     print("ATELIER 801 EMAIL CHANGE")
     print("=" * 50)
-    
-    # Change these values for different accounts
-    ATELIER_USERNAME = "Hora#1469"
-    ATELIER_PASSWORD = "86yiuvvd4"
-    
-    result = change_email_for_account(
-        ATELIER_USERNAME,
-        ATELIER_PASSWORD
-    )
-    
-    print("\n" + "=" * 50)
-    print("RESULT")
+    print("\nUsage:")
+    print("  from atelier801 import Atelier801")
+    print("  from mailtm import MailTM")
+    print("")
+    print("  # Create new email")
+    print("  mailtm = MailTM()")
+    print("  email, password = mailtm.create_account()")
+    print("")
+    print("  # Login and change")
+    print("  client = Atelier801()")
+    print("  client.login('YourAccount#1234', 'yourpassword')")
+    print("  client.change_email(email)")
+    print("")
+    print("  See README.md for full documentation!")
     print("=" * 50)
-    print(f"Success: {result['success']}")
-    print(f"MailTM: {result['mailtm_email']}")
-    print(f"Email Changed: {result['email_changed']}")
-    if result['error']:
-        print(f"Error: {result['error']}")
