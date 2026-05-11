@@ -452,5 +452,23 @@ class Atelier801:
         """
         return self.logged_in
     
+    def check_email_changed(self, expected_email_prefix: str) -> bool:
+        """
+        Check if email has been changed successfully.
+        
+        Args:
+            expected_email_prefix: First few characters of the expected new email
+            
+        Returns:
+            bool: True if email prefix matches (email changed successfully)
+            
+        Example:
+            >>> # After email change request
+            >>> if client.check_email_changed("abc"):
+            ...     print("Email changed successfully!")
+        """
+        html = self.get_account_page()
+        return expected_email_prefix.lower() in html.lower()
+    
     def __repr__(self) -> str:
         return f"<Atelier801 logged_in={self.logged_in} username={self.username}>"
