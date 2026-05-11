@@ -9,14 +9,15 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="atelier801",
-    version="1.0.1",
+    version="1.0.6",
     author="Lixense",
     author_email="lixlix870@gmail.com",
     description="Python library for Atelier 801 automation",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Lixense/atelier801",
-    packages=find_packages(),
+    packages=["atelier801", "mailtm"],
+    package_dir={"mailtm": "mailtm"},
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -31,4 +32,16 @@ setup(
     install_requires=[
         "requests>=2.28.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "black>=22.0.0",
+            "flake8>=4.0.0",
+        ]
+    },
+    entry_points={
+        "console_scripts": [
+            "atelier801=atelier801.cli:main",
+        ],
+    },
 )
