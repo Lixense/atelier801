@@ -13,18 +13,17 @@ Basic Usage:
     
     client = Atelier801()
     client.login("username#1234", "password")
-    
-    # Check account status
     status = client.get_account_status()
     print(status)
 
-GitHub: https://github.com/Lixense/atelier801
+GitHub: https://github.com/yourusername/atelier801
 """
 
 import requests
 import re
 import hashlib
 import json
+from urllib.parse import quote
 from typing import Optional, Dict, Any, Tuple, List
 from .parser import extract_token_for_action, extract_any_token
 from .crypto import crypte as encrypt_password
@@ -35,114 +34,76 @@ class Atelier801:
     Main client for Atelier 801 operations.
     
     Attributes:
-        base_url (str): Base URL for Atelier 801 API
-        session (requests.Session): HTTP session for requests
-        logged_in (bool): Login status
-    
-    Example:
-        >>> client = Atelier801()
-        >>> client.login("Player#1234", "mypassword")
-        True
-        >>> status = client.get_account_status()
-        >>> print(status['email'])
+        BASE_URL: Base URL for Atelier 801 API
+        logged_in: Whether client is currently logged in
+        username: Current logged in username
     """
-    
+
     BASE_URL = "https://atelier801.com"
-    
-    def __init__(self, session: Optional[requests.Session] = None):
-        """
-        Initialize Atelier 801 client.
-        
-        Args:
-            session: Optional existing requests.Session to use
-            
-        Example:
-            >>> client = Atelier801()
-            >>> # or with custom session
-            >>> sess = requests.Session()
-            >>> client = Atelier801(session=sess)
-        """
-        self.session = session or requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        })
+
+    def __init__(self):
+        """Initialize Atelier 801 client."""
+        self.session = requests.Session()
         self.logged_in = False
         self.username = None
         self._account_cache = None
     
     def login(self, username: str, password: str) -> bool:
         """
-        Login to Atelier 801 account.
+        Login to Atelier 801.
         
         Args:
-            username: Username with discriminator (e.g., "Player#1234")
+            username: Username with discriminator (e.g., "name#1234")
             password: Account password
             
         Returns:
-            bool: True if login successful, False otherwise
+            bool: True if login successful
             
         Example:
             >>> client = Atelier801()
-            >>> if client.login("Player#1234", "mypassword"):
-            ...     print("Logged in!")
+            >>> client.login("Test#1234", "password123")
+            True
         """
-        # Get login page
-        resp = self.session.get(f"{self.BASE_URL}/login")
+        if '#' not in username:
+            print("Warning: Username should include discriminator (e.g., name#1234)")
         
-        # Extract form fields
-        form_match = re.search(r'<form[^>]*id="identification"[^>]*>(.*?)</form>', resp.text, re.DOTALL)
-        if not form_match:
+        # Get login page to extract tokens
+        resp = self.session.get(f"{self.BASE_URL}/login")
+        if resp.status_code != 200:
             return False
         
-        form_content = form_match.group(1)
-        all_inputs = re.findall(r'<input[^>]*>', form_content)
+        # Extract login token
+        login_token = extract_token_for_action(resp.text, "login")
+        if not login_token:
+            login_token = extract_any_token(resp.text)
         
-        # Encrypt password
-        encrypted = encrypt_password(password)
+        if not login_token:
+            return False
         
-        # Build data
+        # Prepare login data
         data = {
-            'rester_connecte': 'on',
-            'id': username,
-            'pass': encrypted,
-            'redirect': 'https://atelier801.com',
+            "login": username,
+            "password": encrypt_password(password),
+            "nxlazdcqga": login_token
         }
         
-        # Add other form fields
-        for inp in all_inputs:
-            name_match = re.search(r'name="([^"]+)"', inp)
-            value_match = re.search(r'value="([^"]*)"', inp)
-            if name_match:
-                field_name = name_match.group(1)
-                field_value = value_match.group(1) if value_match else ""
-                if field_name not in data:
-                    data[field_name] = field_value
+        # Submit login
+        resp = self.session.post(f"{self.BASE_URL}/login", data=data, allow_redirects=True)
         
-        # Post headers
-        post_headers = {
-            'Referer': 'https://atelier801.com/login',
-            'Origin': 'https://atelier801.com',
-            'Content-Type': 'application/x-www-form-urlencoded',
-        }
-        
-        resp = self.session.post(f"{self.BASE_URL}/identification", data=data, headers=post_headers, allow_redirects=False)
-        
-        # Check for successful login (redirect response with session cookie)
-        if 'login=' in str(self.session.cookies) and 'JSESSIONID' in str(self.session.cookies):
+        if resp.status_code == 200 and "deconnexion" in resp.text.lower():
             self.logged_in = True
             self.username = username
             self._account_cache = None
             return True
-        
+            
         return False
     
     def logout(self) -> bool:
         """
-        Logout from current session.
+        Logout from Atelier 801.
         
         Returns:
-            bool: True if logged out successfully
+            bool: True if logout successful
             
         Example:
             >>> client.logout()
@@ -158,13 +119,26 @@ class Atelier801:
     
     def get_account_page(self) -> str:
         """
-        Get raw HTML of account page.
+        Get raw HTML of profile page (includes ban info).
         
         Returns:
-            str: HTML content of account page
+            str: HTML content of profile page
             
         Example:
             >>> html = client.get_account_page()
+        """
+        resp = self.session.get(f"{self.BASE_URL}/profile?pr={quote(self.username)}")
+        return resp.text
+    
+    def get_settings_page(self) -> str:
+        """
+        Get raw HTML of account settings page (includes email info).
+        
+        Returns:
+            str: HTML content of account settings page
+            
+        Example:
+            >>> html = client.get_settings_page()
         """
         resp = self.session.get(f"{self.BASE_URL}/account")
         return resp.text
@@ -194,7 +168,8 @@ class Atelier801:
         if self._account_cache and not force_refresh:
             return self._account_cache
         
-        html = self.get_account_page()
+        profile_html = self.get_account_page()
+        account_html = self.get_settings_page()
         
         status = {
             'username': self.username,
@@ -206,29 +181,39 @@ class Atelier801:
             'ban_info': None
         }
         
-        # Extract email
-        email_match = re.search(r'Email\s*:\s*</span><span[^>]*>([^<]+)</span>', html)
-        if not email_match:
-            email_match = re.search(r'Email\s*:\s*<span[^>]*>([^<]+)</span>', html)
-        if email_match:
-            status['email'] = email_match.group(1)
-            status['email_validated'] = 'mail-non-certifie' not in html
+        # Extract email from account settings page
+        mail_patterns = [
+            r'Mail\s*:\s*</span><span[^>]*>([^<]+)</span>',
+            r'Mail\s*:\s*<span[^>]*>([^<]+)</span>',
+            r'Email\s*:\s*</span><span[^>]*>([^<]+)</span>',
+            r'Email\s*:\s*<span[^>]*>([^<]+)</span>',
+        ]
+        for pattern in mail_patterns:
+            mail_match = re.search(pattern, account_html)
+            if mail_match:
+                status['email'] = mail_match.group(1).strip()
+                break
         
-        # Check if certified (email form visible = certified)
-        if 'form_changer_mail' in html:
-            idx = html.find('form_changer_mail')
-            form_section = html[idx:idx+100]
-            status['certified'] = 'hidden' not in form_section
+        if status['email']:
+            status['email_validated'] = 'mail-non-certifie' not in account_html
         
-        # Extract registration date
-        date_match = re.search(r'(\d{2}/\d{2}/\d{4})', html)
+        # Check if has validated email (from account settings)
+        # "Vous devez d'abord certifier" = has validated email
+        # "Nouveau mail" = no validated email
+        if 'Vous devez d\'abord certifier' in account_html or 'form-get-certification' in account_html:
+            status['certified'] = True  # Has validated email
+        elif 'Nouveau mail' in account_html:
+            status['certified'] = False  # No validated email
+        
+        # Extract registration date from profile page
+        date_match = re.search(r'(\d{2}/\d{2}/\d{4})', profile_html)
         if date_match:
             status['registration_date'] = date_match.group(1)
         
-        # Check ban status
-        if 'sanction' in html.lower() or 'banni' in html.lower():
+        # Check ban status from profile page
+        if 'sanction' in profile_html.lower() or 'banni' in profile_html.lower():
             status['is_banned'] = True
-            status['ban_info'] = self._parse_ban_info(html)
+            status['ban_info'] = self._parse_ban_info(profile_html)
         
         self._account_cache = status
         return status
@@ -255,190 +240,6 @@ class Atelier801:
         
         return ban_info if ban_info else None
     
-    def change_email(self, new_email: str) -> Dict[str, Any]:
-        """
-        Change account email address.
-        
-        Note: Account must be certified to change email directly.
-        For uncertified accounts, this requests a validation email.
-        
-        Args:
-            new_email: New email address
-            
-        Returns:
-            dict: Result with keys:
-                - success (bool): Whether change was successful
-                - message (str): Response message
-                - validation_sent (bool): Whether validation email was sent
-                
-        Example:
-            >>> result = client.change_email("newemail@example.com")
-            >>> if result['success']:
-            ...     print("Email change requested!")
-        """
-        if not self.logged_in:
-            return {'success': False, 'message': 'Not logged in', 'validation_sent': False}
-        
-        # Get token for set-email action
-        html = self.get_account_page()
-        token_name, token_value = extract_token_for_action(html, 'set-email')
-        
-        if not token_value:
-            return {'success': False, 'message': 'Could not find token', 'validation_sent': False}
-        
-        headers = {
-            'Referer': f'{self.BASE_URL}/account',
-            'Origin': self.BASE_URL,
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-        
-        resp = self.session.post(
-            f'{self.BASE_URL}/set-email',
-            data={'mail': new_email, token_name: token_value},
-            headers=headers
-        )
-        
-        result = resp.json()
-        success = 'SUCCES' in result.get('resultat', '')
-        
-        return {
-            'success': success,
-            'message': result.get('message', ''),
-            'validation_sent': success
-        }
-    
-    def validate_email(self, validation_link: str) -> bool:
-        """
-        Visit validation link to confirm email change.
-        
-        Args:
-            validation_link: Full validation URL from email
-            
-        Returns:
-            bool: True if validation successful
-            
-        Example:
-            >>> # Get link from MailTM
-            >>> link = mailtm.get_validation_link()
-            >>> client.validate_email(link)
-        """
-        if not self.logged_in:
-            return False
-        
-        resp = self.session.get(validation_link)
-        self._account_cache = None  # Refresh cache
-        return resp.status_code == 200
-    
-    def request_certification(self) -> Dict[str, Any]:
-        """
-        Request certification email to be sent to current email.
-        
-        Returns:
-            dict: Result with keys:
-                - success (bool): Whether request was successful
-                - message (str): Response message
-                - token_name (str): CSRF token name used
-                - token_value (str): CSRF token value used
-                
-        Example:
-            >>> result = client.request_certification()
-            >>> if result['success']:
-            ...     print("Certification email sent!")
-        """
-        if not self.logged_in:
-            return {'success': False, 'message': 'Not logged in', 'token_name': None, 'token_value': None}
-        
-        html = self.get_account_page()
-        token_name, token_value = extract_token_for_action(html, 'get-certification')
-        
-        if not token_value:
-            return {'success': False, 'message': 'Could not find token', 'token_name': None, 'token_value': None}
-        
-        headers = {
-            'Referer': f'{self.BASE_URL}/account',
-            'Origin': self.BASE_URL,
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-        
-        resp = self.session.post(
-            f'{self.BASE_URL}/get-certification',
-            data={token_name: token_value},
-            headers=headers
-        )
-        
-        result = resp.json()
-        success = 'SUCCES' in result.get('resultat', '')
-        
-        return {
-            'success': success,
-            'message': result.get('message', ''),
-            'token_name': token_name,
-            'token_value': token_value
-        }
-    
-    def submit_certification_code(self, code: str) -> Dict[str, Any]:
-        """
-        Submit certification code received via email.
-        
-        Args:
-            code: Certification code from email
-            
-        Returns:
-            dict: Result with keys:
-                - success (bool): Whether certification was successful
-                - message (str): Response message
-                
-        Example:
-            >>> # Get code from MailTM
-            >>> code = mailtm.get_certification_code()
-            >>> result = client.submit_certification_code(code)
-            >>> if result['success']:
-            ...     print("Certified!")
-        """
-        if not self.logged_in:
-            return {'success': False, 'message': 'Not logged in'}
-        
-        html = self.get_account_page()
-        token_name, token_value = extract_token_for_action(html, 'set-certification')
-        
-        if not token_value:
-            return {'success': False, 'message': 'Could not find token'}
-        
-        headers = {
-            'Referer': f'{self.BASE_URL}/account',
-            'Origin': self.BASE_URL,
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-        
-        resp = self.session.post(
-            f'{self.BASE_URL}/set-certification',
-            data={'code': code, token_name: token_value},
-            headers=headers
-        )
-        
-        result = resp.json()
-        success = 'SUCCES' in result.get('resultat', '')
-        
-        self._account_cache = None  # Refresh cache
-        
-        return {
-            'success': success,
-            'message': result.get('message', '')
-        }
-    
-    def get_session(self) -> requests.Session:
-        """
-        Get the underlying requests session.
-        
-        Returns:
-            requests.Session: The session object
-            
-        Example:
-            >>> session = client.get_session()
-            >>> # Use session directly for custom requests
-        """
-        return self.session
-    
     def is_logged_in(self) -> bool:
         """
         Check if currently logged in.
@@ -456,8 +257,8 @@ class Atelier801:
         """
         Check if email has been changed successfully.
         
-        Atelier801 masks emails showing only the first letter (e.g. "p***@w***.net").
-        We check if the first letter of the new email appears in the Mail field.
+        Atelier801 masks emails showing only the first letter (e.g. "4***@w***.net").
+        So we check if the first letter of the new email appears in the Mail field.
         
         Args:
             new_email: The new email address that was set
@@ -467,33 +268,89 @@ class Atelier801:
             
         Example:
             >>> # After email change + validation
-            >>> if client.check_email_changed("p7w5p96cao68@wshu.net"):
+            >>> if client.check_email_changed("4aavysr73bea@wshu.net"):
             ...     print("Email changed successfully!")
         """
-        html = self.get_account_page()
-        first_letter = (new_email[0].lower() if new_email else '')
+        html = self.get_settings_page()
+        first_letter = new_email[0].lower() if new_email else ''
         
-        # Check mail2 input value (shows masked email like "p***@w***.net")
+        # Check mail2 input value (shows masked email like "4***@w***.net")
         mail2_match = re.search(r'<input[^>]*id="mail2"[^>]*value="([^"]*)"', html)
         if mail2_match:
             current = mail2_match.group(1).lower()
-            if current.startswith(first_letter):
-                return True
+            return current.startswith(first_letter)
         
-        # Check the displayed Mail field - pattern: Mail : <span>email</span>
-        mail_match = re.search(r'Mail\s*:\s*<[^>]*>([^<]+)', html)
-        if mail_match:
-            displayed = mail_match.group(1).strip().lower()
-            if displayed.startswith(first_letter):
-                return True
-        
-        # Check for any email starting with the first letter in the page
-        # Pattern: firstletter***@***.net
-        masked_pattern = first_letter + r'[*@]'
-        if re.search(masked_pattern, html.lower()):
-            return True
+        # Fallback: check if first letter appears near Mail field
+        mail_section = re.search(r'Mail\s*:\s*<[^>]*>([^<]+)', html)
+        if mail_section:
+            displayed = mail_section.group(1).strip().lower()
+            return displayed.startswith(first_letter)
         
         return False
     
-    def __repr__(self) -> str:
-        return f"<Atelier801 logged_in={self.logged_in} username={self.username}>"
+    def change_email(self, new_email: str) -> bool:
+        """
+        Change account email address.
+        
+        Note: Only works for accounts WITHOUT validated email.
+        
+        Args:
+            new_email: New email address to set
+            
+        Returns:
+            bool: True if email change was initiated
+            
+        Example:
+            >>> client.change_email("newemail@example.com")
+            True
+        """
+        if not self.logged_in:
+            return False
+        
+        # Get account page to extract token
+        resp = self.session.get(f"{self.BASE_URL}/account")
+        if resp.status_code != 200:
+            return False
+        
+        # Extract change email token
+        token = extract_token_for_action(resp.text, "change-email")
+        if not token:
+            token = extract_any_token(resp.text)
+        
+        if not token:
+            return False
+        
+        # Submit email change
+        data = {
+            "mail2": new_email,
+            "nxlazdcqga": token
+        }
+        
+        resp = self.session.post(f"{self.BASE_URL}/change-email", data=data)
+        return resp.status_code == 200
+    
+    def validate_email(self, validation_url: str) -> bool:
+        """
+        Validate email from validation link.
+        
+        Args:
+            validation_url: Full URL from validation email
+            
+        Returns:
+            bool: True if validation successful
+            
+        Example:
+            >>> client.validate_email("https://atelier801.com/validate-email?token=xxx")
+            True
+        """
+        if not self.logged_in:
+            return False
+        
+        # Extract token from URL if full URL provided
+        if "token=" in validation_url:
+            token = validation_url.split("token=")[1].split("&")[0]
+            resp = self.session.get(f"{self.BASE_URL}/validate-email?token={token}")
+        else:
+            resp = self.session.get(validation_url)
+        
+        return resp.status_code == 200
