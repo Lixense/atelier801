@@ -198,12 +198,15 @@ class Atelier801:
             status['email_validated'] = 'mail-non-certifie' not in account_html
         
         # Check if has validated email (from account settings)
-        # "Vous devez d'abord certifier" = has validated email
-        # "Nouveau mail" = no validated email
+        # "Vous devez d'abord certifier" = email NOT validated (need to certify first)
+        # "form-get-certification" = email NOT validated (need to certify first)
+        # "Nouveau mail" = email can be changed (NOT validated)
         if 'Vous devez d\'abord certifier' in account_html or 'form-get-certification' in account_html:
-            status['certified'] = True  # Has validated email
+            status['certified'] = False  # Email NOT validated - need to certify first
         elif 'Nouveau mail' in account_html:
-            status['certified'] = False  # No validated email
+            status['certified'] = False  # Email NOT validated - can change email
+        else:
+            status['certified'] = True  # Email IS validated - cannot change email
         
         # Extract registration date from profile page
         date_match = re.search(r'(\d{2}/\d{2}/\d{4})', profile_html)
