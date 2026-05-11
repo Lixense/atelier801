@@ -108,10 +108,10 @@ def change_email_for_account(username, password, existing_mailtm=None):
 
 
 if __name__ == "__main__":
-    # Quick test for Prosodyo#9496
+    # Quick test for ACCOUNT#1234
     from atelier801 import Atelier801
     c = Atelier801()
-    c.login('Prosodyo#9496', '6tf3bx3h')
+    c.login('Account#1234', 'password')
     html = c.get_account_page()
     
     if 'Nouveau mail' in html:
